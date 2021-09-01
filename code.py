@@ -47,7 +47,7 @@ def setdisplay():
 
 class MultiTare :
 
-    def __init__(self, loadcells):
+    def __init__(self, loadcells, main):
         self.loadcells = loadcells
         self.name = "Multple Tare"
 
@@ -77,12 +77,12 @@ class MultiTare :
 
     def refresh(self) :
         self.updatetares()
-        self.bat_area.text = f"{round(self.batval, 1)}V"
+        self.bat_area.text = f"{round(self.batval)}%"
         if self.status == ads123x.STATUS_TARE :
             self.text_area.text = '---'
             self.status_area.text = 'TARE'        
             return
-        if status == ads123x.STATUS_SETTLE :
+        if self.status == ads123x.STATUS_SETTLE :
             self.status_area.text = 'WAIT'
             return        
         self.status_area.text = ''
@@ -115,12 +115,13 @@ class MultiTare :
 
     def btn_b(self) :
         self.tarevalues = [0.0] * self.tares
-        for x in loadcells : x.dotare()
+        for x in self.loadcells : x.dotare()
 
 class Calibrate :
-    def __init__(self, loadcells):
+    def __init__(self, loadcells, main):
         self.loadcells = loadcells
         self.name = "Calibrate"
+        self.main = main
 
     def init(self):
         splash = displayio.Group()
@@ -145,6 +146,7 @@ class Calibrate :
             self.second = [x.avg - x.tare for x in self.loadcells]
             for x in range(0,2) : self.loadcells[x].calibrate([self.first[x], self.second[x]], [self.first[1-x], self.second[1-x]], 500)
             self.status_area.text = "Calibrated"
+            self.main.savecal()
 
     def showweight(self, weight, status, batval):
         if status == ads123x.STATUS_OK :
@@ -164,18 +166,17 @@ class Calibrate :
         pass
 
 class Menu :
-    def __init__(self, loadcells):
+    def __init__(self, loadcells, main):
         self.loadcells = loadcells
+        self.main = main
 
     def init(self):
-        global mode
-        global prevmode
         splash = displayio.Group()
         display.show(splash)
 
         self.index = 0
         
-        self.lines = [label.Label(smallfont, text=x.name, color=0xFFFFFF, x = 8, y = 8 + i * 14) for i,x in enumerate(modes)]
+        self.lines = [label.Label(smallfont, text=x.name, color=0xFFFFFF, x = 8, y = 8 + i * 14) for i,x in enumerate(self.main.modes)]
         for x in self.lines : splash.append(x)
         self.update()
 
@@ -192,80 +193,114 @@ class Menu :
         pass
 
     def btn_a(self) :
-        self.index = (self.index + 1) % len(modes)
+        self.index = (self.index + 1) % len(self.main.modes)
         self.update()
 
     def btn_b(self) :
-        global mode
-        global prevmode
-        mode = modes[self.index]
-        prevmode = self
-        mode.init()
+        self.main.mode = self.main.modes[self.index]
+        self.main.prevmode = self
+        self.main.mode.init()
 
 class PowerOff :
-    def __init__(self, loadcells):
+    def __init__(self, loadcells, main):
         self.loadcells = loadcells
         self.name = "Power Off"
+        self.main = main
 
     def init(self):
-        poweroff()
+        self.main.poweroff()
+        
+
+class Main :
+
+    def __init__(self):
+        self.bat = analogio.AnalogIn(board.A6)
+
+        feathers2.led_set(False)
+
+        self.btn_a = countio.Counter(board.D5)
+        self.btn_b = countio.Counter(board.D21)
+        self.btn_c = countio.Counter(board.D20)
+
+        setdisplay()
+
+        self.adc = ads123x.ADCBoard(board.D18, board.D19, board.D17, board.D16)
+        self.adc.powerup()
+
+        self.loadcells = [ads123x.LoadCell(self.adc, 20.592, False), ads123x.LoadCell(self.adc, 20.592, True)]
+
+        self.modes = [MultiTare(self.loadcells, self), Calibrate(self.loadcells, self), PowerOff(self.loadcells, self)]
+        self.menu = Menu(self.loadcells, self)
+        self.mode = self.modes[0]
+        self.mode.init()
+        self.prevmode = self.menu
+
+    def switchmode(self):
+        m = self.prevmode
+        self.prevmode = self.mode
+        self.mode = m
+        self.mode.init() 
+        #poweroff()
+
+    def savecal(self):
+        pass
+
+    def loadcal(self):
+        pass
+
+    def poweroff(self):
+        self.adc.powerdown()
+        display.show(displayio.Group())
+        feathers2.enable_LDO2(False)
+        displayio.release_displays()
+        self.btn_a.deinit()
+        self.btn_b.deinit()
+        self.btn_c.deinit()
+        pin_alarm1 = alarm.pin.PinAlarm(pin=board.D5, value=False, pull=True)
+
+        alarm.exit_and_deep_sleep_until_alarms(pin_alarm1) #, pin_alarm2, pin_alarm3)
+
+    def getbatterypercent(self, val):
+        if val >= 4.2 : return 100
+        if val >= 4.15 : return 95
+        if val >= 4.11 : return 90
+        if val >= 4.08 : return 85
+        if val >= 4.02 : return 80
+        if val >= 3.98 : return 75
+        if val >= 3.95 : return 70
+        if val >= 3.91 : return 65
+        if val >= 3.87 : return 60
+        if val >= 3.85 : return 55
+        if val >= 3.84 : return 50
+        if val >= 3.82 : return 45
+        if val >= 3.8 : return 40
+        if val >= 3.79 : return 35
+        if val >= 3.77 : return 30
+        if val >= 3.75 : return 25
+        if val >= 3.73 : return 20
+        if val >= 3.71 : return 15
+        if val >= 3.59 : return 10
+        if val >= 3.41 : return 5
+        return 0
 
 
-def switchmode():
-    global mode
-    global prevmode
-    m = prevmode
-    prevmode = mode
-    mode = m
-    mode.init() 
-    #poweroff()
+    def mainloop(self):
+        self.loadcal()
+        while True: 
+            batval = self.getbatterypercent(self.bat.value / 65536 * self.bat.reference_voltage * 2)
+            vals =  [x.pollweight() for x in self.loadcells]
+            wt = sum([x[0] for x in vals])
+            status = max([x[1] for x in vals])
+            self.mode.showweight(wt, status, batval)
+            if(self.btn_a.count > 0) :
+                self.mode.btn_a()
+                self.btn_a.reset()
+            if(self.btn_b.count > 0) :
+                self.mode.btn_b()
+                self.btn_b.reset()
+            if(self.btn_c.count > 0) :
+                self.btn_c.reset()
+                self.switchmode()
 
-def poweroff():
-    adc.powerdown()
-    display.show(displayio.Group())
-    feathers2.enable_LDO2(False)
-    displayio.release_displays()
-    btn_a.deinit()
-    btn_b.deinit()
-    btn_c.deinit()
-    pin_alarm1 = alarm.pin.PinAlarm(pin=board.D5, value=False, pull=True)
 
-    alarm.exit_and_deep_sleep_until_alarms(pin_alarm1) #, pin_alarm2, pin_alarm3)
-
-bat = analogio.AnalogIn(board.A6    )
-
-feathers2.led_set(False)
-
-btn_a = countio.Counter(board.D5)
-btn_b = countio.Counter(board.D21)
-btn_c = countio.Counter(board.D20)
-
-setdisplay()
-
-adc = ads123x.ADCBoard(board.D18, board.D19, board.D17, board.D16)
-adc.powerup()
-
-loadcells = [ads123x.LoadCell(adc, 20.592, False), ads123x.LoadCell(adc, 20.592, True)]
-
-modes = [MultiTare(loadcells), Calibrate(loadcells), PowerOff(loadcells)]
-menu = Menu(loadcells)
-mode = modes[0]
-mode.init()
-prevmode = menu
-
-while True: 
-    batval = bat.value / 65536 * bat.reference_voltage * 2
-    vals =  [x.pollweight() for x in loadcells]
-    wt = sum([x[0] for x in vals])
-    status = max([x[1] for x in vals])
-    mode.showweight(wt, status, batval)
-    if(btn_a.count > 0) :
-        mode.btn_a()
-        btn_a.reset()
-    if(btn_b.count > 0) :
-        mode.btn_b()
-        btn_b.reset()
-    if(btn_c.count > 0) :
-        btn_c.reset()
-        switchmode()
-
+Main().mainloop()
