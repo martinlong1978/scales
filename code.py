@@ -19,7 +19,6 @@ import ads123x
 import alarm
 import feathers2
 import analogio
-#import traceback
 
 from adafruit_display_text import label
 import adafruit_displayio_sh1107
@@ -87,7 +86,7 @@ class MultiTare :
             return        
         self.status_area.text = ''
         val = self.weight - self.gettarevalue()
-        text1 = f"{round(val / 1000, 3)}kg" if val >= 1000 else f"{val}g"  
+        text1 = f"{round(val / 1000, 3)}kg" if abs(val) >= 1000 else f"{val}g"  
         self.text_area.text = text1
     
     def updatetares(self):
@@ -243,10 +242,18 @@ class Main :
         #poweroff()
 
     def savecal(self):
-        pass
+        with open("/state.txt", "w") as fp:
+            fp.write(f"{self.loadcells[0].cal}\n")
+            fp.write(f"{self.loadcells[1].cal}\n")
 
     def loadcal(self):
-        pass
+        try:
+            with open("/state.txt", "r") as fp:
+                lines = fp.read().splitlines()
+                self.loadcells[0].cal = float(lines[0])
+                self.loadcells[1].cal = float(lines[1])
+        except:
+            pass
 
     def poweroff(self):
         self.adc.powerdown()
@@ -262,17 +269,17 @@ class Main :
 
     def getbatterypercent(self, val):
         if val >= 4.2 : return 100
-        if val >= 4.15 : return 95
-        if val >= 4.11 : return 90
-        if val >= 4.08 : return 85
-        if val >= 4.02 : return 80
-        if val >= 3.98 : return 75
-        if val >= 3.95 : return 70
-        if val >= 3.91 : return 65
-        if val >= 3.87 : return 60
-        if val >= 3.85 : return 55
-        if val >= 3.84 : return 50
-        if val >= 3.82 : return 45
+        if val >= 4.15 : return 100
+        if val >= 4.11 : return 100
+        if val >= 4.08 : return 100
+        if val >= 4.02 : return 100
+        if val >= 3.98 : return 100
+        if val >= 3.95 : return 100
+        if val >= 3.91 : return 90
+        if val >= 3.87 : return 80
+        if val >= 3.85 : return 70
+        if val >= 3.84 : return 60
+        if val >= 3.82 : return 50
         if val >= 3.8 : return 40
         if val >= 3.79 : return 35
         if val >= 3.77 : return 30
@@ -283,24 +290,41 @@ class Main :
         if val >= 3.41 : return 5
         return 0
 
+    def nudgeclock(self):
+        feathers2.led_blink()
+        self.time = time.time()
+        print(f"nudge : {self.time}")
+        feathers2.led_blink() 
+
+    def checkclock(self):
+        if time.time() > self.time + 1200 :
+            self.poweroff()
 
     def mainloop(self):
         self.loadcal()
+        self.nudgeclock()
+        wt = 0
         while True: 
             batval = self.getbatterypercent(self.bat.value / 65536 * self.bat.reference_voltage * 2)
             vals =  [x.pollweight() for x in self.loadcells]
+            prevwt = wt
             wt = sum([x[0] for x in vals])
             status = max([x[1] for x in vals])
+            if(status == ads123x.STATUS_OK and abs(prevwt - wt) > 5) : self.nudgeclock()
             self.mode.showweight(wt, status, batval)
             if(self.btn_a.count > 0) :
+                self.nudgeclock()
                 self.mode.btn_a()
                 self.btn_a.reset()
             if(self.btn_b.count > 0) :
+                self.nudgeclock()
                 self.mode.btn_b()
                 self.btn_b.reset()
             if(self.btn_c.count > 0) :
+                self.nudgeclock()
                 self.btn_c.reset()
                 self.switchmode()
+        
 
 
 Main().mainloop()
