@@ -195,6 +195,14 @@ class Menu :
         prevmode = self
         mode.init()
 
+class PowerOff :
+    def __init__(self, loadcells):
+        self.loadcells = loadcells
+        self.name = "Power Off"
+
+    def init(self):
+        poweroff()
+
 
 def switchmode():
     global mode
@@ -228,7 +236,7 @@ adc.powerup()
 
 loadcells = [ads123x.LoadCell(adc, 20.592, False), ads123x.LoadCell(adc, 20.592, True)]
 
-modes = [MultiTare(loadcells), Calibrate(loadcells)]
+modes = [MultiTare(loadcells), Calibrate(loadcells), PowerOff(loadcells)]
 menu = Menu(loadcells)
 mode = modes[0]
 mode.init()
