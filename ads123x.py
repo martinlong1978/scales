@@ -50,6 +50,7 @@ class ADCBoard :
     
     def powerdown(self):
         self.pwr.value = False
+        # wait for ack
 
     def powerup(self):
         self.pwr.value = True

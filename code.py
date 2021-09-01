@@ -17,6 +17,8 @@ import countio
 from adafruit_bitmap_font import bitmap_font
 import ads123x
 import alarm
+import feathers2
+import analogio
 #import traceback
 
 from adafruit_display_text import label
@@ -59,19 +61,23 @@ class MultiTare :
         self.weight = 0
         self.status = ads123x.STATUS_TARE
         self.tarecache = None
+        self.batval = 0.0
 
         #trs = [f' {x+1} ' for x in range(0, self.tares)]
         self.tare_area = label.Label(smallfont, text='', color=0xFFFFFF, x=10, y=4)
         self.text_area = label.Label(font, text='', color=0xFFFFFF, x=10, y=30)
         self.status_area = label.Label(smallfont, text='', color=0xFFFFFF, x=10, y=56)
+        self.bat_area = label.Label(smallfont, text='', color=0xFFFFFF, x=100, y=56)
         splash.append(self.text_area)
         splash.append(self.tare_area)
         splash.append(self.status_area)
+        splash.append(self.bat_area)
         self.refresh()
 
 
     def refresh(self) :
         self.updatetares()
+        self.bat_area.text = f"{round(self.batval, 1)}V"
         if self.status == ads123x.STATUS_TARE :
             self.text_area.text = '---'
             self.status_area.text = 'TARE'        
@@ -94,8 +100,9 @@ class MultiTare :
             self.tarecache = sum(self.tarevalues) - self.tarevalues[self.active]
         return self.tarecache
 
-    def showweight(self, weight, status):
+    def showweight(self, weight, status, batval):
         self.status = status
+        self.batval = batval
         if status == ads123x.STATUS_OK:
             self.weight = round(weight, 1)
         self.refresh()
@@ -139,7 +146,7 @@ class Calibrate :
             for x in range(0,2) : self.loadcells[x].calibrate([self.first[x], self.second[x]], [self.first[1-x], self.second[1-x]], 500)
             self.status_area.text = "Calibrated"
 
-    def showweight(self, weight, status):
+    def showweight(self, weight, status, batval):
         if status == ads123x.STATUS_OK :
             self.status = status
             self.nudge()
@@ -181,7 +188,7 @@ class Menu :
                 x.color = 0xFFFFFF
                 x.background_color = 0x000000
 
-    def showweight(self, weight, status):
+    def showweight(self, weight, status, batval):
         pass
 
     def btn_a(self) :
@@ -215,6 +222,9 @@ def switchmode():
 
 def poweroff():
     adc.powerdown()
+    display.show(displayio.Group())
+    feathers2.enable_LDO2(False)
+    displayio.release_displays()
     btn_a.deinit()
     btn_b.deinit()
     btn_c.deinit()
@@ -222,8 +232,9 @@ def poweroff():
 
     alarm.exit_and_deep_sleep_until_alarms(pin_alarm1) #, pin_alarm2, pin_alarm3)
 
+bat = analogio.AnalogIn(board.A6    )
 
-
+feathers2.led_set(False)
 
 btn_a = countio.Counter(board.D5)
 btn_b = countio.Counter(board.D21)
@@ -243,10 +254,11 @@ mode.init()
 prevmode = menu
 
 while True: 
+    batval = bat.value / 65536 * bat.reference_voltage * 2
     vals =  [x.pollweight() for x in loadcells]
     wt = sum([x[0] for x in vals])
     status = max([x[1] for x in vals])
-    mode.showweight(wt, status)
+    mode.showweight(wt, status, batval)
     if(btn_a.count > 0) :
         mode.btn_a()
         btn_a.reset()
