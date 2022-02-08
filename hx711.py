@@ -1,8 +1,7 @@
 import digitalio
 import time
 
-
-buffersize = 5
+buffersize = 10
 
 STATUS_WAITING = 0
 STATUS_OK = 0
@@ -23,38 +22,31 @@ class ADCBoard :
         self.pwr.direction = digitalio.Direction.OUTPUT
         self.islc.direction = digitalio.Direction.OUTPUT
 
-
     def readbit(self):
         self.clk.value = True
         self.clk.value = False
+        time.sleep(0.0000002)
         v = self.da.value
         return v
 
     def readvalue(self, input):
         self.islc.value = input
         self.clk.value = False
-        #time.sleep(0.00002)
-        #test = 0
-        #timeout = 0
-        #while(test < 5):
-        #    test = (test + 1) if self.da.value == False else 0
-        #    time.sleep(0.02)
-        #    timeout += 1
-        #    if(timeout > 50):return 0, [0] * 24 
-        while(self.da.value) : pass
+#        time.sleep(0.0000002)
+        test = 0
+        while(test < 15):
+            test = (test + 1) if self.da.value == False else 0
+            time.sleep(0.002)
         val = 0
-        bits = [0] * 24
         for x in range(0,24):
             val = val * 2
             v = self.readbit() 
-            bits[x] = 1 if v else 0
             if x == 0 : posneg = v # handle 2's compliment negative numbers
             val += (-1 if not v else 0) if posneg else (1 if v  else 0) 
         # 25th pulse
         self.readbit()
-        #print(bits)
         self.clk.value = False
-        return val, bits
+        return val
     
     def powerdown(self):
         self.pwr.value = False
@@ -62,9 +54,7 @@ class ADCBoard :
 
     def powerup(self):
         self.pwr.value = True
-        time.sleep(0.1)
         self.pwr.value = False
-        time.sleep(0.1)
         self.pwr.value = True
 
 class LoadCell :
@@ -82,21 +72,9 @@ class LoadCell :
 
 
     def pollweight(self):
-        w = 0
-        st = STATUS_OK
-        c = 0
-        while(c < buffersize):
-            p, st = self.pollweight_int()
-            if(st == STATUS_OK):
-                w = p
-            c += 1
-        return w, st
-
-    def pollweight_int(self):
         val = 16777215
-        bits = [0] * 24
         while val == 16777215 :
-            val, bits = self.board.readvalue(self.input)
+            val = self.board.readvalue(self.input)
         if self.cal > 1 and abs(self.avg - val)  > (self.cal * 3) :
             self.tmpringbuffer[self.tmppointer] = val
             self.tmppointer += 1 
@@ -119,9 +97,7 @@ class LoadCell :
                 self.tare = self.avg
         if(self.tare == 0):
             return 0, STATUS_TARE
-        wt = (self.avg - self.tare) / self.cal
-        #print(f" {wt} {bits}")
-        return wt, STATUS_OK
+        return (self.avg - self.tare) / self.cal, STATUS_OK
 
     def dotare(self):
         self.tare = 0

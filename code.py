@@ -23,6 +23,8 @@ import analogio
 from adafruit_display_text import label
 import adafruit_displayio_sh1107
 
+feathers2.enable_LDO2(True)
+
 
 font = bitmap_font.load_font("/fonts/Anton-Regular-32.bdf")
 smallfont = terminalio.FONT #bitmap_font.load_font("/fonts/ArchivoNarrow-Bold-12.bdf")
@@ -224,6 +226,8 @@ class Main :
         setdisplay()
 
         self.adc = ads123x.ADCBoard(board.D18, board.D19, board.D17, board.D16)
+        time.sleep(2)
+
         self.adc.powerup()
 
         self.loadcells = [ads123x.LoadCell(self.adc, 20.592, False), ads123x.LoadCell(self.adc, 20.592, True)]
@@ -240,7 +244,7 @@ class Main :
         self.mode = m
         self.mode.init() 
         #poweroff()
-
+ 
     def savecal(self):
         with open("/state.txt", "w") as fp:
             fp.write(f"{self.loadcells[0].cal}\n")
@@ -250,16 +254,18 @@ class Main :
         try:
             with open("/state.txt", "r") as fp:
                 lines = fp.read().splitlines()
-                self.loadcells[0].cal = float(lines[0])
+                self.loadcells[0].cal = float(lines[0])  
                 self.loadcells[1].cal = float(lines[1])
         except:
             pass
 
     def poweroff(self):
         self.adc.powerdown()
-        display.show(displayio.Group())
+        #display.show(displayio.Group())
+        display.sleep()
         feathers2.enable_LDO2(False)
-        displayio.release_displays()
+        #adafruit_displayio_sh1107.sleep()
+        #displayio.release_displays()
         self.btn_a.deinit()
         self.btn_b.deinit()
         self.btn_c.deinit()
@@ -293,7 +299,7 @@ class Main :
     def nudgeclock(self):
         feathers2.led_blink()
         self.time = time.time()
-        print(f"nudge : {self.time}")
+        #print(f"nudge : {self.time}")
         feathers2.led_blink() 
 
     def checkclock(self):
